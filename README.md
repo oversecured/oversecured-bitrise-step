@@ -1,6 +1,6 @@
 # Oversecured
 
-A SAST Android vulnerability scanner. Searching vulnerabilities among 90+ categories (https://oversecured.com/vulnerabilities) using Oversecured API
+A SAST Android vulnerability scanner. Searches for vulnerabilities in [90+ categories](https://oversecured.com/vulnerabilities) using Oversecured API.
 
 
 ## How to use this Step
