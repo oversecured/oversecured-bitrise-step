@@ -31,7 +31,7 @@ inputs:
       title: "Oversecured API key"
       summary: Your Oversecured access token
       description: |
-        A key should be generated in your [profile settings](https://oversecured.com/settings).
+        A key should be generated in your [profile settings](https://oversecured.com/settings/api-keys).
       is_required: true
       is_sensitive: true
   - integration_id:
