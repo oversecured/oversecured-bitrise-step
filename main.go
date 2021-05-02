@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"path/filepath"
 	"log"
+	"strings"
 )
 
 var AccessToken = os.Getenv("access_token")
@@ -133,9 +134,32 @@ func AddVersion(bucketKey string, name string) {
 	}
 }
 
+func ValidateAppPath(path string) {
+	if !strings.HasSuffix(path, ".apk") && !strings.HasSuffix(path, ".aab") {
+		err := fmt.Errorf("App file '%s' has invalid extension. Only '.apk' and '.aab' are allowed.", path)
+		log.Fatal(err)
+	}
+	if len(path) == 0 || !FileExists(path) {
+		err := fmt.Errorf("App file '%s' doesn't exist. Make sure you've added the 'Android Build' step to the Workflow.", path)
+		log.Fatal(err)
+	}
+}
+
+func FileExists(name string) bool {
+    if _, err := os.Stat(name); err != nil {
+        if os.IsNotExist(err) {
+            return false
+        }
+    }
+    return true
+}
+
 func main() {
 	fmt.Println("oversecured: starting version upload")
-	var path = os.Getenv("app_path")
+
+	var path = strings.TrimSpace(os.Getenv("app_path"))
+	ValidateAppPath(path)
+
 	var name = filepath.Base(path)
 	
 	signResp := GetUploadInfo(name)
