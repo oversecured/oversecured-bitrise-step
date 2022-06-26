@@ -4,7 +4,7 @@ default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
 app:
   envs:
   - BITRISE_STEP_ID: oversecured
-  - BITRISE_STEP_VERSION: "1.0.1"
+  - BITRISE_STEP_VERSION: "1.0.2"
   - BITRISE_STEP_GIT_CLONE_URL: https://github.com/oversecured/oversecured-bitrise-step.git
   - MY_STEPLIB_REPO_FORK_GIT_URL: https://github.com/oversecured/bitrise-steplib
 
@@ -33,6 +33,7 @@ workflows:
         inputs:
         - access_token: $OVERSECURED_ACCESS_TOKEN
         - integration_id: $OVERSECURED_INTEGRATION_ID
+        - branch_name: $OVERSECURED_BRANCH_NAME
         - app_path: $BITRISE_APK_PATH
     - script:
         inputs:

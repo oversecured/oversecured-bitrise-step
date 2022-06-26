@@ -1,6 +1,6 @@
 # Oversecured
 
-A SAST Android vulnerability scanner. Searches for vulnerabilities in [90+ categories](https://oversecured.com/vulnerabilities) using Oversecured API.
+Enterprise vulnerability scanner for Android and iOS apps. It offers app owners and developers the ability to secure each new version of a mobile app by integrating Oversecured into the development process.
 
 
 ## How to use this Step

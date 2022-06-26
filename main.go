@@ -13,12 +13,15 @@ import (
 
 var AccessToken = os.Getenv("access_token")
 var IntegrationID = os.Getenv("integration_id")
+var BranchName = os.Getenv("branch_name")
 
 const BaseUrl = "https://api.oversecured.com/v1"
 var GetSignedLinkUrl = fmt.Sprintf("%s/upload/app", BaseUrl)
-var AddVersionUrl = fmt.Sprintf("%s/integrations/%s/versions/add", BaseUrl, IntegrationID)
+var AddVersionUrl = fmt.Sprintf("%s/integrations/%s/branches/%s/versions/add", BaseUrl, IntegrationID, BranchName)
 
-const Platform = "android"
+const PlatformAndroid = "android"
+const PlatformIOS = "ios"
+
 const APIContentType = "application/json"
 const S3ContentType = "application/octet-stream"
 
@@ -65,61 +68,62 @@ type ServerError struct {
 	Message string `json:"message"`
 }
 
-func RequestErr(step string, resp *http.Response) {
+func RequestErr(step string, resp *http.Response) (error) {
 	var serverError ServerError
 	ToJson(resp, &serverError)
 	err := fmt.Errorf("oversecured: Step '%s' failed with code %d, server message: %s", step, resp.StatusCode, serverError.Message)
-	log.Fatal(err)
+	return err
 }
 
 func ToJson(resp *http.Response, target interface{}) {
 	json.NewDecoder(resp.Body).Decode(target)
 }
 
-func UploadFile(url string, path string) {
+func UploadFile(url string, path string) (error) {
     data, err := os.Open(path)
     if err != nil {
         log.Fatal(err)
     }
 	req, err := http.NewRequest(http.MethodPut, url, data)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	fi, err := data.Stat()
 	if err != nil {
-	    log.Fatal(err)
+		return err
 	}
 	req.ContentLength = fi.Size()
 	req.Header.Add("Content-Type", S3ContentType)
 	s3Client := &http.Client{}
 	resp, err := s3Client.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	if resp.StatusCode != 200 {
-		RequestErr("S3 Upload", resp)
+		return RequestErr("S3 Upload", resp)
 	}
+	return nil
 }
 
-func GetUploadInfo(name string) (SignResp) {
+func GetUploadInfo(platform string, path string) (SignResp, error) {
 	signReq := SignReq {
-		Platform: Platform,
-		FileName: name,
+		Platform: platform,
+		FileName: path,
 	}
+	var signResp SignResp
 	jsonValue, _ := json.Marshal(signReq)
 	resp, err := client.Post(GetSignedLinkUrl, APIContentType, bytes.NewBuffer(jsonValue))
 	if err != nil {
-		log.Fatal(err)
+		return signResp, err
 	}
 	if resp.StatusCode != 200 {
-		RequestErr("Signed URL", resp)
+		return signResp, RequestErr("Signed URL", resp)
 	}
-	var signResp SignResp
 	ToJson(resp, &signResp)
-	return signResp
+	return signResp, nil
 }
 
-func AddVersion(bucketKey string, name string) {
+func AddVersion(bucketKey string, name string) (error) {
 	uploadReq := VersionUpload {
 		FileName: name,
 		BucketKey: bucketKey,
@@ -127,22 +131,31 @@ func AddVersion(bucketKey string, name string) {
 	jsonValue, _ := json.Marshal(uploadReq)
 	resp, err := client.Post(AddVersionUrl, APIContentType, bytes.NewBuffer(jsonValue))
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	if resp.StatusCode != 200 {
-		RequestErr("Scan Version", resp)
+		return RequestErr("Scan Version", resp)
 	}
+	return nil
 }
 
-func ValidateAppPath(path string) {
-	if !strings.HasSuffix(path, ".apk") && !strings.HasSuffix(path, ".aab") {
-		err := fmt.Errorf("App file '%s' has invalid extension. Only '.apk' and '.aab' are allowed.", path)
-		log.Fatal(err)
+func GetPlatform(path string) (string, error) {
+	if strings.HasSuffix(path, ".apk") || strings.HasSuffix(path, ".aab") {
+		return PlatformAndroid, nil
 	}
+	if strings.HasSuffix(path, ".zip") {
+		return PlatformIOS, nil
+	}
+	err := fmt.Errorf("App file '%s' has invalid extension. Only '.apk', '.aab' and `.zip` are allowed.", path)
+	return "", err
+}
+
+func ValidateAppPath(path string) (error) {
 	if len(path) == 0 || !FileExists(path) {
-		err := fmt.Errorf("App file '%s' doesn't exist. Make sure you've added the 'Android Build' step to the Workflow.", path)
-		log.Fatal(err)
+		err := fmt.Errorf("App file '%s' doesn't exist. Make sure you've added the 'Android Build' step to the Workflow if you're scanning an Android app, and correctly zipped app sources if iOS.", path)
+		return err
 	}
+	return nil
 }
 
 func FileExists(name string) bool {
@@ -154,18 +167,46 @@ func FileExists(name string) bool {
     return true
 }
 
-func main() {
-	fmt.Println("oversecured: starting version upload")
+func run() (error) {
+	fmt.Println("oversecured: file upload")
 
 	var path = strings.TrimSpace(os.Getenv("app_path"))
-	ValidateAppPath(path)
+
+	err := ValidateAppPath(path)
+	if err != nil {
+		return err
+	}
+
+	platform, err := GetPlatform(path)
+	if err != nil {
+		return err
+	}
 
 	var name = filepath.Base(path)
 	
-	signResp := GetUploadInfo(name)
-	UploadFile(signResp.Url, path)
-	AddVersion(signResp.BucketKey, name)
+	signResp, err := GetUploadInfo(platform, name)
+	if err != nil {
+		return err
+	}
+
+	err = UploadFile(signResp.Url, path)
+	if err != nil {
+		return err
+	}
+
+	err = AddVersion(signResp.BucketKey, name)
+	if err != nil {
+		return err
+	}
 
 	fmt.Println("oversecured: success")
+	return nil
+}
+
+func main() {
+    if err := run(); err != nil {
+	    log.Fatal(err)
+        os.Exit(1)
+    }
 	os.Exit(0)
 }
